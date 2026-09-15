@@ -454,8 +454,8 @@ const PRODUCTS_DATA = [
 
 const PAYMENT_INFO = {
   fulfillmentContacts: {
-    emails: ["singhharpreet5975@gmail.com"],
-    supportEmail: "singhharpreet5975@gmail.com",
+    emails: ["unicampusstore23@gmail.com"],
+    supportEmail: "unicampusstore23@gmail.com",
     whatsappNumbers: [
       { number: "917009918303", label: "+91 70099 18303 (Inventory Manager)" }
     ]
