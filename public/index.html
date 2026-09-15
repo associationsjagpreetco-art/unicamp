@@ -766,7 +766,7 @@ footer a:hover{color:white;}
             </div>
             <div class="contact-detail-text">
               <h4>Email Support &amp; Returns</h4>
-              <p><a href="mailto:singhharpreet5975@gmail.com">singhharpreet5975@gmail.com</a></p>
+              <p><a href="mailto:unicampusstore23@gmail.com">unicampusstore23@gmail.com</a></p>
               <span>Direct mailbox for orders, issues &amp; return requests</span>
             </div>
           </div>
@@ -787,7 +787,7 @@ footer a:hover{color:white;}
         <div class="contact-form-card">
           <h3>Send Us a Message</h3>
           <p>Fill out the form to directly email your query, issue, or return/refund request.</p>
-          <div id="contactSuccessMsg">✓ Message sent to singhharpreet5975@gmail.com successfully!</div>
+          <div id="contactSuccessMsg">✓ Message sent to unicampusstore23@gmail.com successfully!</div>
           <form id="contactForm">
             <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">
               <div class="form-group">
@@ -924,7 +924,7 @@ footer a:hover{color:white;}
       <div class="policy-card-grid">
         <div class="policy-card">
           <h4>✉️ Email with Issue Description</h4>
-          <p>Send to <strong>singhharpreet5975@gmail.com</strong> with your Order ID and issue description (photos if applicable).</p>
+          <p>Send to <strong>unicampusstore23@gmail.com</strong> with your Order ID and issue description (photos if applicable).</p>
         </div>
         <div class="policy-card">
           <h4>🔍 Verification &amp; Support</h4>
@@ -936,8 +936,8 @@ footer a:hover{color:white;}
           <h4 style="font-size:13px;font-weight:800;color:#8b0000;margin-bottom:4px;">Send Return / Refund Email To:</h4>
           <p style="font-size:12px;color:#475569;">Include your Order ID and Issue Description.</p>
         </div>
-        <a href="mailto:singhharpreet5975@gmail.com?subject=Return/Refund%20Request%20-%20Campus%20Store" class="btn-policy-email">
-          ✉️ singhharpreet5975@gmail.com
+        <a href="mailto:unicampusstore23@gmail.com?subject=Return/Refund%20Request%20-%20Campus%20Store" class="btn-policy-email">
+          ✉️ unicampusstore23@gmail.com
         </a>
       </div>
       <div style="text-align:right;margin-top:15px;">
@@ -1717,7 +1717,7 @@ function sendAutomatedEmail(order) {
   const itemsSummary = order.items.map((it,i) => (i+1)+'. '+it.name+' (Qty: '+it.qty+') - Rs.'+(it.price*it.qty)).join('\n');
   const autoresponse = `Hi ${order.student.custName},\n\nYour order on Campus Store has been placed successfully!\n\nOrder ID: #${order.orderId}\nTotal: Rs.${order.total} (Free Campus Delivery)\nDelivery: ${order.student.custHostel}, ${order.student.custFloor||'Floor 1'}, Room ${order.student.custRoom}\nEstimated: Within 2 Business Days\n\nItems:\n${itemsSummary}\n\nPayment: ${order.paymentMethod} — please keep exact change ready\n\nThank you for choosing Campus Store!`;
 
-  fetch('https://formsubmit.co/ajax/singhharpreet5975@gmail.com', {
+  fetch('https://formsubmit.co/ajax/unicampusstore23@gmail.com', {
     method:'POST',
     headers:{'Content-Type':'application/json','Accept':'application/json'},
     body: JSON.stringify({
@@ -1755,7 +1755,7 @@ function renderOrderSuccessScreen(order) {
 
   const emailSubject = `Order Placed: Campus Store #${order.orderId} - ₹${order.total}`;
   const emailBody = `Hi ${order.student.custName},\n\nYour order is confirmed!\n\nOrder ID: #${order.orderId}\nPlaced: ${order.orderTime}\nStudent: ${order.student.custName} (${order.student.custUid})\nContact: ${order.student.custPhone}\nDelivery: ${order.student.custHostel}, ${order.student.custFloor||'Floor 1'}, Room ${order.student.custRoom}\n\nItems:\n${itemsText}\n\nTotal: ₹${order.total} (Free Campus Delivery)\nPayment: ${order.paymentMethod} — please keep exact change ready\n\nThank you for choosing Campus Store!`;
-  const mailtoUrl = `mailto:${order.student.custEmail||'singhharpreet5975@gmail.com'}?cc=singhharpreet5975@gmail.com&subject=${encodeURIComponent(emailSubject)}&body=${encodeURIComponent(emailBody)}`;
+  const mailtoUrl = `mailto:${order.student.custEmail||'unicampusstore23@gmail.com'}?cc=unicampusstore23@gmail.com&subject=${encodeURIComponent(emailSubject)}&body=${encodeURIComponent(emailBody)}`;
 
   const waMsg = `🎓 *NEW CAMPUS ORDER BOOKING*\n━━━━━━━━━━━━━━━━━━━━━━\n📦 *Order ID:* ${order.orderId}\n📅 *Date/Time:* ${order.orderTime}\n👤 *Student:* ${order.student.custName}\n🆔 *Student ID:* ${order.student.custUid}\n📞 *Phone:* ${order.student.custPhone}\n✉️ *Email:* ${order.student.custEmail}\n🏢 *Hostel & Wing:* ${order.student.custHostel}\n📶 *Floor:* ${order.student.custFloor||'Floor 1'}\n🚪 *Room No:* ${order.student.custRoom}\n📝 *Notes:* ${order.student.custNotes||'N/A'}\n━━━━━━━━━━━━━━━━━━━━━━\n🛒 *ITEMS:*\n${itemsText}\n━━━━━━━━━━━━━━━━━━━━━━\n💰 *Total:* ₹${order.total} (Free Delivery)\n💳 *Payment:* ${order.paymentMethod}\n━━━━━━━━━━━━━━━━━━━━━━\n📍 *Action:* Collect cash on delivery & dispatch to room within 2 business days.`;
   const waUrl = `https://wa.me/917009918303?text=${encodeURIComponent(waMsg)}`;
@@ -1819,7 +1819,7 @@ function handleContactSubmit(e) {
   const description = document.getElementById('contactDescription').value.trim();
   if (!name||!subject||!description) { showToast('Please fill Name, Subject, and Description','error'); return; }
 
-  fetch('https://formsubmit.co/ajax/singhharpreet5975@gmail.com', {
+  fetch('https://formsubmit.co/ajax/unicampusstore23@gmail.com', {
     method:'POST',
     headers:{'Content-Type':'application/json','Accept':'application/json'},
     body: JSON.stringify({
@@ -1839,11 +1839,11 @@ function handleContactSubmit(e) {
   }).then(r=>r.json()).then(()=>{
     document.getElementById('contactSuccessMsg').style.display='block';
     document.getElementById('contactForm').reset();
-    showToast('Message sent to singhharpreet5975@gmail.com!','info');
+    showToast('Message sent to unicampusstore23@gmail.com!','info');
     setTimeout(()=>document.getElementById('contactSuccessMsg').style.display='none', 6000);
   }).catch(()=>{
     const body=`Hello,\n\nStudent: ${name} (${uid})\nPhone: ${phone}\n\nCategory: ${subject}\n\n${description}`;
-    window.open(`mailto:singhharpreet5975@gmail.com?subject=${encodeURIComponent(subject+' - '+name)}&body=${encodeURIComponent(body)}`,'_blank');
+    window.open(`mailto:unicampusstore23@gmail.com?subject=${encodeURIComponent(subject+' - '+name)}&body=${encodeURIComponent(body)}`,'_blank');
     document.getElementById('contactSuccessMsg').style.display='block';
     setTimeout(()=>document.getElementById('contactSuccessMsg').style.display='none', 6000);
   });
