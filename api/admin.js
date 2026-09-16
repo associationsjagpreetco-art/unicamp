@@ -9,10 +9,23 @@ const { PRODUCTS_DATA } = require(path.join(__dirname, '..', 'public', 'js', 'pr
 const JWT_SECRET = process.env.JWT_SECRET || 'unicampus_admin_jwt_secret_2025_very_long_and_secure';
 
 // ─── TURSO DB CLIENT ────────────────────────────────────────────
-const db = createClient({
-  url: process.env.TURSO_DB_URL,
-  authToken: process.env.TURSO_DB_TOKEN,
-});
+// Guard against missing env vars so the function doesn't crash on load
+// (a crash here makes EVERY /api/admin/* route -- including login --
+// fail with a non-JSON error page, which is what breaks doLogin()).
+let db;
+let dbInitError = null;
+try {
+  if (!process.env.TURSO_DB_URL) {
+    throw new Error('TURSO_DB_URL environment variable is not set');
+  }
+  db = createClient({
+    url: process.env.TURSO_DB_URL,
+    authToken: process.env.TURSO_DB_TOKEN,
+  });
+} catch (e) {
+  dbInitError = e.message;
+  console.error('Failed to initialize DB client:', e.message);
+}
 
 // ─── HELPER: run a single statement ────────────────────────────
 async function run(sql, args = []) {
@@ -194,8 +207,16 @@ app.use(cookieParser());
 
 let dbReady = false;
 app.use(async (req, res, next) => {
-  if (!dbReady) { await initDB(); dbReady = true; }
-  next();
+  if (dbInitError) {
+    return res.status(500).json({ error: 'Server database is not configured: ' + dbInitError });
+  }
+  try {
+    if (!dbReady) { await initDB(); dbReady = true; }
+    next();
+  } catch (e) {
+    console.error('DB init failed:', e);
+    res.status(500).json({ error: 'Database initialization failed: ' + e.message });
+  }
 });
 
 function requireAuth(req, res, next) {
@@ -501,6 +522,15 @@ app.put('/api/admin/support/:id', requireAuth, async (req, res) => {
 app.delete('/api/admin/support/:id', requireAuth, async (req, res) => {
   await run('DELETE FROM support_tickets WHERE id = ?', [req.params.id]);
   res.json({ success: true });
+});
+
+// ─── GLOBAL ERROR HANDLER ───────────────────────────────────────
+// Ensures the client always gets JSON back, never an HTML crash page
+// (an HTML response is what makes `await r.json()` throw in app.js).
+app.use((err, req, res, next) => {
+  console.error('Unhandled error:', err);
+  if (res.headersSent) return next(err);
+  res.status(500).json({ error: err.message || 'Internal server error' });
 });
 
 module.exports = app;
