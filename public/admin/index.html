@@ -413,6 +413,10 @@ tbody tr:last-child td{border-bottom:none;}
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 2L3 6v14a2 2 0 002 2h14a2 2 0 002-2V6l-3-4z"/><line x1="3" y1="6" x2="21" y2="6"/><path d="M16 10a4 4 0 01-8 0"/></svg>
         Orders
       </div>
+      <div class="nav-item" data-page="products" onclick="navigate('products')">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4"/></svg>
+        Products
+      </div>
       <div class="nav-item" data-page="revenue" onclick="navigate('revenue')">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="22 7 13.5 15.5 8.5 10.5 2 17"/><polyline points="16 7 22 7 22 13"/></svg>
         Revenue
@@ -424,10 +428,6 @@ tbody tr:last-child td{border-bottom:none;}
       <div class="nav-item" data-page="discount" onclick="navigate('discount')">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 3H5a2 2 0 00-2 2v4m6-6h10a2 2 0 012 2v4M9 3v18m0 0h10a2 2 0 002-2V9M9 21H5a2 2 0 01-2-2V9m0 0h18"/></svg>
         Discount
-      </div>
-      <div class="nav-item" data-page="variants" onclick="navigate('variants')">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20.59 13.41l-7.17 7.17a2 2 0 01-2.83 0L2 12V2h10l8.59 8.59a2 2 0 010 2.82z"/><line x1="7" y1="7" x2="7.01" y2="7"/></svg>
-        Product Variants
       </div>
       <div class="nav-item" data-page="support" onclick="navigate('support')">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15a2 2 0 01-2 2H7l-4 4V5a2 2 0 012-2h14a2 2 0 012 2z"/></svg>
@@ -487,7 +487,7 @@ tbody tr:last-child td{border-bottom:none;}
     <div id="page-revenue" class="page-content"></div>
     <div id="page-profit" class="page-content"></div>
     <div id="page-discount" class="page-content"></div>
-    <div id="page-variants" class="page-content"></div>
+    <div id="page-products" class="page-content"></div>
     <div id="page-support" class="page-content"></div>
   </main>
 </div>
@@ -524,7 +524,6 @@ tbody tr:last-child td{border-bottom:none;}
 <!-- TOAST -->
 <div class="toast" id="toast"></div>
 
-<script src="/js/products.js"></script>
-<script src="/admin/app.js"></script>
+<script src="app.js"></script>
 </body>
 </html>
