@@ -454,10 +454,14 @@ const PRODUCTS_DATA = [
 
 const PAYMENT_INFO = {
   fulfillmentContacts: {
-    emails: ["unicampusstore23@gmail.com"],
-    supportEmail: "unicampusstore23@gmail.com",
+    emails: ["singhharpreet5975@gmail.com"],
+    supportEmail: "singhharpreet5975@gmail.com",
     whatsappNumbers: [
       { number: "917009918303", label: "+91 70099 18303 (Inventory Manager)" }
     ]
   }
 };
+
+if (typeof module !== 'undefined' && module.exports) {
+  module.exports = { PRODUCTS_DATA, PAYMENT_INFO };
+}
