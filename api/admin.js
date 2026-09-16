@@ -3,6 +3,8 @@ const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
 const cookieParser = require('cookie-parser');
 const { createClient } = require('@libsql/client');
+const path = require('path');
+const { PRODUCTS_DATA } = require(path.join(__dirname, '..', 'public', 'js', 'products.js'));
 
 const JWT_SECRET = process.env.JWT_SECRET || 'unicampus_admin_jwt_secret_2025_very_long_and_secure';
 
@@ -62,6 +64,26 @@ async function initDB() {
       expires_at TEXT DEFAULT NULL,
       created_at TEXT DEFAULT (datetime('now'))
     );
+    CREATE TABLE IF NOT EXISTS products (
+      id TEXT PRIMARY KEY,
+      name TEXT NOT NULL,
+      category TEXT NOT NULL,
+      category_label TEXT,
+      price REAL NOT NULL,
+      original_price REAL NOT NULL,
+      rating REAL DEFAULT 4.8,
+      reviews_count INTEGER DEFAULT 0,
+      badge TEXT,
+      description TEXT,
+      specs TEXT DEFAULT '[]',
+      stock_count INTEGER DEFAULT 0,
+      image TEXT,
+      gallery TEXT DEFAULT '[]',
+      tags TEXT DEFAULT '[]',
+      active INTEGER DEFAULT 1,
+      created_at TEXT DEFAULT (datetime('now')),
+      updated_at TEXT DEFAULT (datetime('now'))
+    );
     CREATE TABLE IF NOT EXISTS product_variants (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       product_id TEXT NOT NULL,
@@ -93,6 +115,18 @@ async function initDB() {
   if (!existingAdmin) {
     const hash = bcrypt.hashSync('unicampus@26', 12);
     await run('INSERT INTO admin_users (email, password_hash) VALUES (?, ?)', ['admin', hash]);
+  }
+
+  // Seed products from static catalog (one-time, only if table is empty)
+  const { rows: [{ c: productCount }] } = await db.execute('SELECT COUNT(*) as c FROM products');
+  if (Number(productCount) === 0) {
+    for (const p of PRODUCTS_DATA) {
+      await run(
+        `INSERT INTO products (id,name,category,category_label,price,original_price,rating,reviews_count,badge,description,specs,stock_count,image,gallery,tags,active)
+         VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,1)`,
+        [p.id, p.name, p.category, p.categoryLabel || '', p.price, p.originalPrice, p.rating || 4.8, p.reviewsCount || 0, p.badge || null, p.description || '', JSON.stringify(p.specs || []), p.stockCount || 0, p.image || '', JSON.stringify(p.gallery || []), JSON.stringify(p.tags || [])]
+      );
+    }
   }
 
   // Seed demo orders
@@ -158,14 +192,6 @@ const app = express();
 app.use(express.json());
 app.use(cookieParser());
 
-// Fix for Vercel: ensure Express sees the full path
-app.use((req, res, next) => {
-  if (req.url === '/' && req.originalUrl && req.originalUrl !== '/') {
-    req.url = req.originalUrl.split('?')[0];
-  }
-  next();
-});
-
 let dbReady = false;
 app.use(async (req, res, next) => {
   if (!dbReady) { await initDB(); dbReady = true; }
@@ -179,14 +205,34 @@ function requireAuth(req, res, next) {
   catch { return res.status(401).json({ error: 'Invalid or expired token' }); }
 }
 
-// PUBLIC: product variants for storefront (no auth), grouped by product_id
-app.get('/api/variants', async (req, res) => {
+function rowToProduct(r) {
+  return {
+    id: r.id, name: r.name, category: r.category, categoryLabel: r.category_label,
+    price: r.price, originalPrice: r.original_price, rating: r.rating, reviewsCount: r.reviews_count,
+    badge: r.badge, description: r.description,
+    specs: JSON.parse(r.specs || '[]'), inStock: r.stock_count > 0, stockCount: r.stock_count,
+    image: r.image, gallery: JSON.parse(r.gallery || '[]'), tags: JSON.parse(r.tags || '[]'),
+    active: !!r.active
+  };
+}
+
+async function variantsByProduct() {
   const rows = await all('SELECT id, product_id, label, price, stock FROM product_variants WHERE active = 1 ORDER BY price ASC');
   const grouped = {};
-  for (const r of rows) {
-    (grouped[r.product_id] = grouped[r.product_id] || []).push({ id: r.id, label: r.label, price: r.price, stock: r.stock });
-  }
-  res.json(grouped);
+  for (const r of rows) (grouped[r.product_id] = grouped[r.product_id] || []).push({ id: r.id, label: r.label, price: r.price, stock: r.stock });
+  return grouped;
+}
+
+// PUBLIC: products for storefront (no auth), active only, with variants attached
+app.get('/api/products', async (req, res) => {
+  const rows = await all('SELECT * FROM products WHERE active = 1 ORDER BY category ASC, name ASC');
+  const grouped = await variantsByProduct();
+  res.json(rows.map(r => { const p = rowToProduct(r); p.variants = grouped[p.id] || []; return p; }));
+});
+
+// PUBLIC: product variants for storefront (no auth), grouped by product_id
+app.get('/api/variants', async (req, res) => {
+  res.json(await variantsByProduct());
 });
 
 // AUTH
@@ -349,6 +395,46 @@ app.put('/api/admin/discounts/:id', requireAuth, async (req, res) => {
 
 app.delete('/api/admin/discounts/:id', requireAuth, async (req, res) => {
   await run('DELETE FROM discounts WHERE id = ?', [req.params.id]);
+  res.json({ success: true });
+});
+
+// PRODUCTS (admin)
+app.get('/api/admin/products', requireAuth, async (req, res) => {
+  const rows = await all('SELECT * FROM products ORDER BY category ASC, name ASC');
+  res.json(rows.map(rowToProduct));
+});
+
+app.get('/api/admin/products/:id', requireAuth, async (req, res) => {
+  const row = await get('SELECT * FROM products WHERE id = ?', [req.params.id]);
+  if (!row) return res.status(404).json({ error: 'Product not found' });
+  res.json(rowToProduct(row));
+});
+
+app.post('/api/admin/products', requireAuth, async (req, res) => {
+  const p = req.body;
+  if (!p.id || !p.name || !p.category || p.price == null || p.originalPrice == null) return res.status(400).json({ error: 'Missing required fields (id, name, category, price, originalPrice)' });
+  if (await get('SELECT id FROM products WHERE id = ?', [p.id])) return res.status(409).json({ error: 'A product with this ID already exists' });
+  await run(
+    `INSERT INTO products (id,name,category,category_label,price,original_price,rating,reviews_count,badge,description,specs,stock_count,image,gallery,tags,active)
+     VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+    [p.id, p.name, p.category, p.categoryLabel || '', p.price, p.originalPrice, p.rating || 4.8, p.reviewsCount || 0, p.badge || null, p.description || '', JSON.stringify(p.specs || []), p.stockCount || 0, p.image || '', JSON.stringify(p.gallery || []), JSON.stringify(p.tags || []), p.active === false ? 0 : 1]
+  );
+  res.json({ success: true });
+});
+
+app.put('/api/admin/products/:id', requireAuth, async (req, res) => {
+  const p = req.body;
+  if (!await get('SELECT id FROM products WHERE id = ?', [req.params.id])) return res.status(404).json({ error: 'Product not found' });
+  await run(
+    `UPDATE products SET name=?,category=?,category_label=?,price=?,original_price=?,rating=?,reviews_count=?,badge=?,description=?,specs=?,stock_count=?,image=?,gallery=?,tags=?,active=?,updated_at=datetime('now') WHERE id=?`,
+    [p.name, p.category, p.categoryLabel || '', p.price, p.originalPrice, p.rating || 4.8, p.reviewsCount || 0, p.badge || null, p.description || '', JSON.stringify(p.specs || []), p.stockCount || 0, p.image || '', JSON.stringify(p.gallery || []), JSON.stringify(p.tags || []), p.active === false ? 0 : 1, req.params.id]
+  );
+  res.json({ success: true });
+});
+
+app.delete('/api/admin/products/:id', requireAuth, async (req, res) => {
+  await run('DELETE FROM product_variants WHERE product_id = ?', [req.params.id]);
+  await run('DELETE FROM products WHERE id = ?', [req.params.id]);
   res.json({ success: true });
 });
 
