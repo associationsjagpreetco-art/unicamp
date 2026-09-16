@@ -119,11 +119,11 @@ function navigate(page) {
   currentPage = page;
   document.querySelectorAll('.nav-item').forEach(el => el.classList.toggle('active', el.dataset.page === page));
   document.querySelectorAll('.page-content').forEach(el => el.classList.toggle('active', el.id === 'page-'+page));
-  const titles = { overview:'Overview', orders:'Orders', revenue:'Revenue', profit:'Profit', discount:'Discount Codes', variants:'Product Variants', support:'Customer Support' };
-  const subs   = { overview:'Welcome back, Admin! Here\'s what\'s happening.', orders:'Manage and track all orders', revenue:'Revenue analytics and trends', profit:'Profit breakdown and analysis', discount:'Manage discount codes', variants:'Add page-count / size / type variants for products', support:'Customer requests and messages' };
+  const titles = { overview:'Overview', orders:'Orders', products:'Products', revenue:'Revenue', profit:'Profit', discount:'Discount Codes', support:'Customer Support' };
+  const subs   = { overview:'Welcome back, Admin! Here\'s what\'s happening.', orders:'Manage and track all orders', products:'Add, edit, remove products and their variants', revenue:'Revenue analytics and trends', profit:'Profit breakdown and analysis', discount:'Manage discount codes', support:'Customer requests and messages' };
   document.getElementById('page-title').textContent = titles[page];
   document.getElementById('page-sub').textContent = subs[page];
-  const renderers = { overview:renderOverview, orders:renderOrders, revenue:renderRevenue, profit:renderProfit, discount:renderDiscount, variants:renderVariants, support:renderSupport };
+  const renderers = { overview:renderOverview, orders:renderOrders, products:renderProducts, revenue:renderRevenue, profit:renderProfit, discount:renderDiscount, support:renderSupport };
   if (renderers[page]) renderers[page]();
 }
 
@@ -785,183 +785,295 @@ async function deleteDiscount(id, code) {
   } catch(e) { showToast(e.message,'error'); }
 }
 
-// ─── PAGE: PRODUCT VARIANTS ─────────────────────────────────────
-let variantsState = { filterProduct: '' };
+// ─── PAGE: PRODUCTS ─────────────────────────────────────────────
+let productsState = { search:'', category:'' };
+let currentProductVariants = [];
 
-function allBaseProducts() {
-  return (typeof PRODUCTS_DATA !== 'undefined' ? PRODUCTS_DATA : []);
-}
-
-async function renderVariants() {
-  const el = document.getElementById('page-variants');
-  const products = allBaseProducts();
+async function renderProducts() {
+  const el = document.getElementById('page-products');
   el.innerHTML = `
     <div class="section-header">
-      <h2>Product Variants</h2>
-      <button class="btn btn-blue" onclick="openVariantModal()">+ New Variant</button>
+      <h2>Products</h2>
+      <button class="btn btn-blue" onclick="openProductModal()">+ New Product</button>
     </div>
     <div class="panel">
       <div class="panel-body" style="padding-bottom:0;">
         <div class="toolbar">
-          <select class="filter-select" id="var-filter-product" onchange="variantsState.filterProduct=this.value;loadVariants()">
-            <option value="">All Products</option>
-            ${products.map(p=>`<option value="${p.id}">${p.name}</option>`).join('')}
+          <div class="search-input">
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#9ca3af" stroke-width="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+            <input type="text" placeholder="Search products…" id="prod-search" oninput="debouncedProductSearch()">
+          </div>
+          <select class="filter-select" id="prod-category" onchange="productsState.category=this.value;loadProducts()">
+            <option value="">All Categories</option>
+            <option value="stationary">Stationary Essentials</option>
+            <option value="gym">Gym & Fitness</option>
+            <option value="laptop">Laptop & Study Gear</option>
+            <option value="hostel">Hostel Living Essentials</option>
           </select>
         </div>
       </div>
       <div class="table-wrap">
         <table>
-          <thead><tr><th>PRODUCT</th><th>VARIANT</th><th>PRICE</th><th>STOCK</th><th>ACTIVE</th><th>ACTIONS</th></tr></thead>
-          <tbody id="variants-tbody"><tr class="loading-row"><td colspan="6">Loading…</td></tr></tbody>
+          <thead><tr><th>PRODUCT</th><th>CATEGORY</th><th>PRICE</th><th>STOCK</th><th>VARIANTS</th><th>ACTIVE</th><th>ACTIONS</th></tr></thead>
+          <tbody id="products-tbody"><tr class="loading-row"><td colspan="7">Loading…</td></tr></tbody>
         </table>
       </div>
     </div>
-    ${variantModal()}
+    ${productModal()}
   `;
-  loadVariants();
+  loadProducts();
 }
 
-async function loadVariants() {
-  const tbody = document.getElementById('variants-tbody');
+const debouncedProductSearch = debounce(() => {
+  productsState.search = document.getElementById('prod-search')?.value || '';
+  loadProducts();
+}, 300);
+
+async function loadProducts() {
+  const tbody = document.getElementById('products-tbody');
   if (!tbody) return;
   try {
-    const q = variantsState.filterProduct ? `?product_id=${encodeURIComponent(variantsState.filterProduct)}` : '';
-    const variants = await apiFetch(`${API}/variants${q}`);
-    if (!variants.length) {
-      tbody.innerHTML = `<tr><td colspan="6"><div class="empty-state"><div class="icon">🏷️</div><h3>No variants yet</h3><p>Add page-count / size variants for a product</p></div></td></tr>`;
+    const all = await apiFetch(`${API}/products`);
+    const variantCounts = {};
+    try {
+      const variants = await apiFetch(`${API}/variants`);
+      variants.forEach(v => { variantCounts[v.product_id] = (variantCounts[v.product_id]||0) + 1; });
+    } catch {}
+    let list = all;
+    if (productsState.category) list = list.filter(p => p.category === productsState.category);
+    if (productsState.search) {
+      const q = productsState.search.toLowerCase();
+      list = list.filter(p => p.name.toLowerCase().includes(q) || p.id.toLowerCase().includes(q));
+    }
+    if (!list.length) {
+      tbody.innerHTML = `<tr><td colspan="7"><div class="empty-state"><div class="icon">📦</div><h3>No products found</h3></div></td></tr>`;
       return;
     }
-    tbody.innerHTML = variants.map(v=>`<tr>
-      <td>${v.product_name}<div style="font-size:11px;color:var(--text-3);">${v.product_id}</div></td>
-      <td style="font-weight:700;">${v.label}</td>
-      <td>${fmt(v.price)}</td>
-      <td>${fmtNum(v.stock)}</td>
+    tbody.innerHTML = list.map(p=>`<tr>
+      <td>
+        <div style="display:flex;align-items:center;gap:10px;">
+          <img src="${p.image}" style="width:38px;height:38px;object-fit:cover;border-radius:8px;background:#f1f5f9;" onerror="this.style.visibility='hidden'">
+          <div><div style="font-weight:700;">${p.name}</div><div style="font-size:11px;color:var(--text-3);">${p.id}</div></div>
+        </div>
+      </td>
+      <td>${p.categoryLabel || p.category}</td>
+      <td>${fmt(p.price)}<div style="font-size:11px;color:var(--text-3);text-decoration:line-through;">${fmt(p.originalPrice)}</div></td>
+      <td>${fmtNum(p.stockCount)}</td>
+      <td>${variantCounts[p.id] ? variantCounts[p.id]+' option'+(variantCounts[p.id]>1?'s':'') : '—'}</td>
       <td>
         <label class="toggle">
-          <input type="checkbox" ${v.active?'checked':''} onchange="toggleVariant(${v.id},this.checked)">
+          <input type="checkbox" ${p.active?'checked':''} onchange="toggleProductActive('${p.id}',this.checked)">
           <span class="toggle-slider"></span>
         </label>
       </td>
       <td>
         <div style="display:flex;gap:4px;">
-          <span class="icon-action" onclick='editVariant(${JSON.stringify(v).split("'").join("&apos;")})'>✏️</span>
-          <span class="icon-action del" onclick="deleteVariant(${v.id},'${(v.label+'').replace(/'/g,"\\'")}')">🗑️</span>
+          <span class="icon-action" onclick="editProduct('${p.id}')">✏️</span>
+          <span class="icon-action del" onclick="deleteProduct('${p.id}','${(p.name+'').replace(/'/g,"\\'")}')">🗑️</span>
         </div>
       </td>
     </tr>`).join('');
   } catch(e) {
-    tbody.innerHTML = `<tr><td colspan="6"><div class="empty-state"><div class="icon">⚠️</div><h3>Failed to load</h3></div></td></tr>`;
+    tbody.innerHTML = `<tr><td colspan="7"><div class="empty-state"><div class="icon">⚠️</div><h3>Failed to load</h3></div></td></tr>`;
   }
 }
 
-function variantModal() {
-  const products = allBaseProducts();
-  return `<div class="modal-overlay" id="variant-modal">
-    <div class="modal">
-      <div class="modal-head"><h2 id="var-modal-title">New Variant</h2><div class="modal-close" onclick="closeVariantModal()">✕</div></div>
+function productModal() {
+  return `<div class="modal-overlay" id="product-modal">
+    <div class="modal" style="max-width:640px;">
+      <div class="modal-head"><h2 id="prod-modal-title">New Product</h2><div class="modal-close" onclick="closeProductModal()">✕</div></div>
       <div class="modal-body">
-        <input type="hidden" id="var-id">
         <div class="form-row">
-          <div class="form-group" style="flex:1 1 100%;">
-            <label class="form-label">Product *</label>
-            <select id="var-product" class="form-control" onchange="onVariantProductChange()">
-              <option value="">Select a product…</option>
-              ${products.map(p=>`<option value="${p.id}" data-name="${p.name}">${p.name} (${p.id})</option>`).join('')}
-              <option value="__custom__">Other / Custom product ID…</option>
+          <div class="form-group"><label class="form-label">Product ID *</label><input type="text" id="prod-id" class="form-control" placeholder="stat-024"></div>
+          <div class="form-group"><label class="form-label">Category *</label>
+            <select id="prod-category-input" class="form-control">
+              <option value="stationary">Stationary Essentials</option>
+              <option value="gym">Gym & Fitness</option>
+              <option value="laptop">Laptop & Study Gear</option>
+              <option value="hostel">Hostel Living Essentials</option>
             </select>
           </div>
         </div>
-        <div class="form-row" id="var-custom-row" style="display:none;">
-          <div class="form-group"><label class="form-label">Custom Product ID *</label><input type="text" id="var-product-id-custom" class="form-control" placeholder="stat-001"></div>
-          <div class="form-group"><label class="form-label">Custom Product Name *</label><input type="text" id="var-product-name-custom" class="form-control" placeholder="Practical Notebook"></div>
+        <div class="form-row">
+          <div class="form-group" style="flex:1 1 100%;"><label class="form-label">Product Name *</label><input type="text" id="prod-name" class="form-control" placeholder="Practical Notebook (200 Pages)"></div>
         </div>
         <div class="form-row">
-          <div class="form-group"><label class="form-label">Variant Label *</label><input type="text" id="var-label" class="form-control" placeholder="e.g. 200 Pages"></div>
-          <div class="form-group"><label class="form-label">Price (₹) *</label><input type="number" id="var-price" class="form-control" placeholder="110"></div>
+          <div class="form-group"><label class="form-label">Price (₹) *</label><input type="number" id="prod-price" class="form-control"></div>
+          <div class="form-group"><label class="form-label">Original Price (₹) *</label><input type="number" id="prod-original-price" class="form-control"></div>
+          <div class="form-group"><label class="form-label">Stock</label><input type="number" id="prod-stock" class="form-control"></div>
         </div>
         <div class="form-row">
-          <div class="form-group"><label class="form-label">Stock</label><input type="number" id="var-stock" class="form-control" placeholder="100"></div>
+          <div class="form-group"><label class="form-label">Badge</label><input type="text" id="prod-badge" class="form-control" placeholder="Popular"></div>
+          <div class="form-group"><label class="form-label">Rating</label><input type="number" step="0.1" id="prod-rating" class="form-control" placeholder="4.8"></div>
+          <div class="form-group"><label class="form-label">Reviews Count</label><input type="number" id="prod-reviews" class="form-control" placeholder="0"></div>
+        </div>
+        <div class="form-row">
+          <div class="form-group" style="flex:1 1 100%;"><label class="form-label">Main Image URL</label><input type="text" id="prod-image" class="form-control" placeholder="assets/images/... or https://..."></div>
+        </div>
+        <div class="form-row">
+          <div class="form-group" style="flex:1 1 100%;"><label class="form-label">Gallery Image URLs (one per line)</label><textarea id="prod-gallery" class="form-control" rows="2"></textarea></div>
+        </div>
+        <div class="form-row">
+          <div class="form-group" style="flex:1 1 100%;"><label class="form-label">Description</label><textarea id="prod-description" class="form-control" rows="2"></textarea></div>
+        </div>
+        <div class="form-row">
+          <div class="form-group" style="flex:1 1 100%;"><label class="form-label">Specs / Key Features (one per line)</label><textarea id="prod-specs" class="form-control" rows="3"></textarea></div>
+        </div>
+        <div class="form-row">
+          <div class="form-group" style="flex:1 1 60%;"><label class="form-label">Tags (comma separated)</label><input type="text" id="prod-tags" class="form-control" placeholder="notebook, lab, stationary"></div>
           <div class="form-group" style="display:flex;align-items:center;gap:10px;padding-top:22px;">
-            <label class="toggle"><input type="checkbox" id="var-active" checked><span class="toggle-slider"></span></label>
-            <label class="form-label" style="margin:0;">Active</label>
+            <label class="toggle"><input type="checkbox" id="prod-active" checked><span class="toggle-slider"></span></label>
+            <label class="form-label" style="margin:0;">Active (visible on store)</label>
           </div>
         </div>
-        <div class="form-error" id="var-form-err"></div>
+        <div class="form-error" id="prod-form-err"></div>
+
+        <div id="prod-variants-section" style="display:none;border-top:1px solid var(--border);margin-top:16px;padding-top:16px;">
+          <h4 style="font-size:13px;font-weight:800;color:#0f172a;margin-bottom:10px;">Variants (e.g. 120 / 200 / 300 Pages)</h4>
+          <div id="prod-variants-list" style="display:flex;flex-direction:column;gap:6px;margin-bottom:10px;"></div>
+          <div class="form-row" style="align-items:flex-end;">
+            <div class="form-group"><label class="form-label">Label</label><input type="text" id="pv-label" class="form-control" placeholder="200 Pages"></div>
+            <div class="form-group"><label class="form-label">Price (₹)</label><input type="number" id="pv-price" class="form-control"></div>
+            <div class="form-group"><label class="form-label">Stock</label><input type="number" id="pv-stock" class="form-control"></div>
+            <div class="form-group" style="flex:0 0 auto;"><button type="button" class="btn btn-outline" onclick="addProductVariant()">+ Add</button></div>
+          </div>
+        </div>
       </div>
       <div class="modal-footer">
-        <button class="btn btn-outline" onclick="closeVariantModal()">Cancel</button>
-        <button class="btn btn-blue" onclick="saveVariant()">Save</button>
+        <button class="btn btn-outline" onclick="closeProductModal()">Cancel</button>
+        <button class="btn btn-blue" onclick="saveProduct()">Save Product</button>
       </div>
     </div>
   </div>`;
 }
 
-function onVariantProductChange() {
-  const val = document.getElementById('var-product').value;
-  document.getElementById('var-custom-row').style.display = val === '__custom__' ? 'flex' : 'none';
-}
-
-function openVariantModal(v=null) {
-  document.getElementById('var-modal-title').textContent = v ? 'Edit Variant' : 'New Variant';
-  document.getElementById('var-id').value = v ? v.id : '';
-  const products = allBaseProducts();
-  const isKnown = v && products.some(p=>p.id===v.product_id);
-  document.getElementById('var-product').value = v ? (isKnown ? v.product_id : '__custom__') : '';
-  document.getElementById('var-custom-row').style.display = (v && !isKnown) ? 'flex' : 'none';
-  document.getElementById('var-product-id-custom').value = (v && !isKnown) ? v.product_id : '';
-  document.getElementById('var-product-name-custom').value = (v && !isKnown) ? v.product_name : '';
-  document.getElementById('var-label').value = v ? v.label : '';
-  document.getElementById('var-price').value = v ? v.price : '';
-  document.getElementById('var-stock').value = v ? v.stock : '';
-  document.getElementById('var-active').checked = v ? !!v.active : true;
-  document.getElementById('var-form-err').classList.remove('show');
-  document.getElementById('variant-modal').classList.add('open');
-}
-
-function closeVariantModal() { document.getElementById('variant-modal').classList.remove('open'); }
-
-function editVariant(v) { openVariantModal(v); }
-
-async function saveVariant() {
-  const id = document.getElementById('var-id').value;
-  const sel = document.getElementById('var-product').value;
-  const errEl = document.getElementById('var-form-err');
-  let product_id, product_name;
-  if (sel === '__custom__') {
-    product_id = document.getElementById('var-product-id-custom').value.trim();
-    product_name = document.getElementById('var-product-name-custom').value.trim();
-  } else {
-    product_id = sel;
-    product_name = document.getElementById('var-product').selectedOptions[0]?.dataset.name || '';
+function renderProductVariantsList() {
+  const box = document.getElementById('prod-variants-list');
+  if (!box) return;
+  if (!currentProductVariants.length) {
+    box.innerHTML = `<div style="font-size:12px;color:var(--text-3);">No variants yet — this product sells at its base price only.</div>`;
+    return;
   }
-  const label = document.getElementById('var-label').value.trim();
-  const price = parseFloat(document.getElementById('var-price').value);
-  const stock = parseInt(document.getElementById('var-stock').value) || 0;
-  const active = document.getElementById('var-active').checked;
-  if (!product_id || !product_name || !label || !price) { errEl.textContent='Product, label and price are required'; errEl.classList.add('show'); return; }
+  box.innerHTML = currentProductVariants.map(v=>`
+    <div style="display:flex;align-items:center;justify-content:space-between;background:#f8fafc;border:1px solid var(--border);border-radius:8px;padding:8px 12px;">
+      <span style="font-size:13px;font-weight:600;">${v.label} — ${fmt(v.price)} ${v.stock?('· stock '+v.stock):''}</span>
+      <span class="icon-action del" onclick="removeProductVariant(${v.id})">🗑️</span>
+    </div>`).join('');
+}
+
+async function openProductModal(productId=null) {
+  document.getElementById('prod-form-err').classList.remove('show');
+  document.getElementById('prod-variants-section').style.display = productId ? 'block' : 'none';
+  currentProductVariants = [];
+  if (productId) {
+    document.getElementById('prod-modal-title').textContent = 'Edit Product';
+    const p = await apiFetch(`${API}/products/${productId}`);
+    document.getElementById('prod-id').value = p.id;
+    document.getElementById('prod-id').disabled = true;
+    document.getElementById('prod-category-input').value = p.category;
+    document.getElementById('prod-name').value = p.name;
+    document.getElementById('prod-price').value = p.price;
+    document.getElementById('prod-original-price').value = p.originalPrice;
+    document.getElementById('prod-stock').value = p.stockCount;
+    document.getElementById('prod-badge').value = p.badge || '';
+    document.getElementById('prod-rating').value = p.rating;
+    document.getElementById('prod-reviews').value = p.reviewsCount;
+    document.getElementById('prod-image').value = p.image || '';
+    document.getElementById('prod-gallery').value = (p.gallery||[]).join('\n');
+    document.getElementById('prod-description').value = p.description || '';
+    document.getElementById('prod-specs').value = (p.specs||[]).join('\n');
+    document.getElementById('prod-tags').value = (p.tags||[]).join(', ');
+    document.getElementById('prod-active').checked = !!p.active;
+    currentProductVariants = await apiFetch(`${API}/variants?product_id=${encodeURIComponent(p.id)}`);
+  } else {
+    document.getElementById('prod-modal-title').textContent = 'New Product';
+    ['prod-id','prod-name','prod-price','prod-original-price','prod-stock','prod-badge','prod-rating','prod-reviews','prod-image','prod-gallery','prod-description','prod-specs','prod-tags']
+      .forEach(id => document.getElementById(id).value = '');
+    document.getElementById('prod-id').disabled = false;
+    document.getElementById('prod-category-input').value = 'stationary';
+    document.getElementById('prod-active').checked = true;
+  }
+  renderProductVariantsList();
+  document.getElementById('product-modal').classList.add('open');
+}
+
+function closeProductModal() { document.getElementById('product-modal').classList.remove('open'); }
+
+function editProduct(id) { openProductModal(id); }
+
+function collectProductPayload() {
+  return {
+    name: document.getElementById('prod-name').value.trim(),
+    category: document.getElementById('prod-category-input').value,
+    categoryLabel: { stationary:'Stationary Essentials', gym:'Gym & Fitness', laptop:'Laptop & Study Gear', hostel:'Hostel Living Essentials' }[document.getElementById('prod-category-input').value],
+    price: parseFloat(document.getElementById('prod-price').value),
+    originalPrice: parseFloat(document.getElementById('prod-original-price').value),
+    stockCount: parseInt(document.getElementById('prod-stock').value) || 0,
+    badge: document.getElementById('prod-badge').value.trim() || null,
+    rating: parseFloat(document.getElementById('prod-rating').value) || 4.8,
+    reviewsCount: parseInt(document.getElementById('prod-reviews').value) || 0,
+    image: document.getElementById('prod-image').value.trim(),
+    gallery: document.getElementById('prod-gallery').value.split('\n').map(s=>s.trim()).filter(Boolean),
+    description: document.getElementById('prod-description').value.trim(),
+    specs: document.getElementById('prod-specs').value.split('\n').map(s=>s.trim()).filter(Boolean),
+    tags: document.getElementById('prod-tags').value.split(',').map(s=>s.trim()).filter(Boolean),
+    active: document.getElementById('prod-active').checked
+  };
+}
+
+async function saveProduct() {
+  const id = document.getElementById('prod-id').value.trim();
+  const errEl = document.getElementById('prod-form-err');
+  const payload = collectProductPayload();
+  if (!id || !payload.name || !payload.price || !payload.originalPrice) { errEl.textContent='Product ID, name, price and original price are required'; errEl.classList.add('show'); return; }
+  const isEdit = document.getElementById('prod-id').disabled;
   try {
-    const body = JSON.stringify({ product_id, product_name, label, price, stock, active });
-    if (id) await apiFetch(`${API}/variants/${id}`, { method:'PUT', body });
-    else await apiFetch(`${API}/variants`, { method:'POST', body });
-    closeVariantModal(); showToast(id?'Variant updated':'Variant added','success'); loadVariants();
+    if (isEdit) await apiFetch(`${API}/products/${id}`, { method:'PUT', body: JSON.stringify(payload) });
+    else await apiFetch(`${API}/products`, { method:'POST', body: JSON.stringify({ id, ...payload }) });
+    closeProductModal(); showToast(isEdit?'Product updated':'Product created','success'); loadProducts();
   } catch(e) { errEl.textContent=e.message; errEl.classList.add('show'); }
 }
 
-async function toggleVariant(id, active) {
+async function toggleProductActive(id, active) {
   try {
-    const all = await apiFetch(`${API}/variants`);
-    const v = all.find(x=>x.id===id);
-    if (!v) return;
-    await apiFetch(`${API}/variants/${id}`, { method:'PUT', body: JSON.stringify({...v, active}) });
-    showToast(active?'Variant activated':'Variant deactivated','success');
-  } catch(e) { showToast(e.message,'error'); loadVariants(); }
+    const p = await apiFetch(`${API}/products/${id}`);
+    await apiFetch(`${API}/products/${id}`, { method:'PUT', body: JSON.stringify({...p, active}) });
+    showToast(active?'Product activated':'Product deactivated','success');
+  } catch(e) { showToast(e.message,'error'); loadProducts(); }
 }
 
-async function deleteVariant(id, label) {
-  if (!confirm(`Delete variant "${label}"?`)) return;
+async function deleteProduct(id, name) {
+  if (!confirm(`Delete product "${name}"? This also removes its variants.`)) return;
   try {
-    await apiFetch(`${API}/variants/${id}`, { method:'DELETE' });
-    showToast('Variant deleted','success'); loadVariants();
+    await apiFetch(`${API}/products/${id}`, { method:'DELETE' });
+    showToast('Product deleted','success'); loadProducts();
+  } catch(e) { showToast(e.message,'error'); }
+}
+
+// Variants embedded inside product modal (added only after product exists)
+async function addProductVariant() {
+  const productId = document.getElementById('prod-id').value.trim();
+  if (!document.getElementById('prod-id').disabled) { showToast('Save the product first, then add variants','error'); return; }
+  const label = document.getElementById('pv-label').value.trim();
+  const price = parseFloat(document.getElementById('pv-price').value);
+  const stock = parseInt(document.getElementById('pv-stock').value) || 0;
+  if (!label || !price) { showToast('Variant label and price are required','error'); return; }
+  try {
+    await apiFetch(`${API}/variants`, { method:'POST', body: JSON.stringify({ product_id: productId, product_name: document.getElementById('prod-name').value.trim(), label, price, stock, active: true }) });
+    currentProductVariants = await apiFetch(`${API}/variants?product_id=${encodeURIComponent(productId)}`);
+    renderProductVariantsList();
+    document.getElementById('pv-label').value=''; document.getElementById('pv-price').value=''; document.getElementById('pv-stock').value='';
+    showToast('Variant added','success');
+  } catch(e) { showToast(e.message,'error'); }
+}
+
+async function removeProductVariant(variantId) {
+  if (!confirm('Remove this variant?')) return;
+  const productId = document.getElementById('prod-id').value.trim();
+  try {
+    await apiFetch(`${API}/variants/${variantId}`, { method:'DELETE' });
+    currentProductVariants = await apiFetch(`${API}/variants?product_id=${encodeURIComponent(productId)}`);
+    renderProductVariantsList();
   } catch(e) { showToast(e.message,'error'); }
 }
 
